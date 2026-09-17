@@ -20,6 +20,8 @@ var (
 	ErrIncomplete = errors.New("расчёт не готов к фиксации")
 )
 
+// InputError хранит поле отдельно от текста. Метод Unwrap позволяет вызывающему
+// использовать errors.Is(err, ErrInvalid), не теряя подробность для интерфейса.
 type InputError struct {
 	Field   string
 	Message string
@@ -33,9 +35,10 @@ func invalid(field, message string) error {
 }
 
 type Participant struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Order int64  `json:"order"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Order — стабильный ключ для разрешения равных остатков при округлении.
+	Order int64 `json:"order"`
 }
 
 type Weight struct {
@@ -72,7 +75,8 @@ type Bill struct {
 	Participants []Participant `json:"participants"`
 	PayerID      string        `json:"payer_id"`
 	Items        []Item        `json:"items"`
-	ReceiptTotal *int64        `json:"receipt_total"`
+	// Указатель сохраняет разницу между отсутствующей суммой и суммой 0 копеек.
+	ReceiptTotal *int64 `json:"receipt_total"`
 }
 
 type Share struct {

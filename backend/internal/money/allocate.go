@@ -58,6 +58,8 @@ func allocate(amount int64, index map[string]Participant, weights []Weight) ([]S
 	if len(weights) == 0 || len(weights) > MaxParticipants {
 		return nil, invalid("weights", "нужно выбрать от 1 до 1000 участников")
 	}
+	// Локальный тип нужен только этому алгоритму: наружу выходит простая Share,
+	// а порядок и остаток остаются деталями округления.
 	type portion struct {
 		share     Share
 		order     int64
@@ -81,6 +83,8 @@ func allocate(amount int64, index map[string]Participant, weights []Weight) ([]S
 		totalWeight += weight.Value // <= 1000 × 1000000.
 		portions[i] = portion{share: Share{ParticipantID: p.ID}, order: p.Order}
 	}
+	// Сначала каждому достаётся целая часть точной дроби. Произведение безопасно:
+	// верхние границы amount и weight заданы константами пакета.
 	var assigned int64
 	for i, weight := range weights {
 		product := amount * weight.Value // <= 10^17, проверено лимитами выше.
@@ -88,6 +92,8 @@ func allocate(amount int64, index map[string]Participant, weights []Weight) ([]S
 		portions[i].remainder = product % totalWeight
 		assigned += portions[i].share.Amount
 	}
+	// Недостающие копейки получают самые большие дробные остатки. При равенстве
+	// стабильный Order делает повторный расчёт детерминированным.
 	sort.Slice(portions, func(i, j int) bool {
 		if portions[i].remainder != portions[j].remainder {
 			return portions[i].remainder > portions[j].remainder
@@ -97,6 +103,8 @@ func allocate(amount int64, index map[string]Participant, weights []Weight) ([]S
 	for i := int64(0); i < amount-assigned; i++ {
 		portions[i].share.Amount++
 	}
+	// После округления возвращаем бизнес-порядок участников, а не временный
+	// порядок, использованный для раздачи остатка.
 	sort.Slice(portions, func(i, j int) bool { return portions[i].order < portions[j].order })
 	shares := make([]Share, len(portions))
 	for i, p := range portions {

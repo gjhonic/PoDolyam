@@ -29,6 +29,8 @@ import (
 //go:embed all:ui
 var assets embed.FS
 
+// App — объект, методы которого Wails делает доступными Vue. Здесь хранятся
+// только долгоживущие зависимости приложения, а не данные отдельного вызова.
 type App struct {
 	ctx   context.Context
 	store *local.Store
@@ -39,6 +41,8 @@ func decode(body string, out any) error {
 	if len(body) > 1<<20 {
 		return errors.New("слишком большой документ")
 	}
+	// Строгий decoder отклоняет опечатки в именах полей. Вторая Decode ниже
+	// гарантирует, что строка содержит ровно один JSON-документ.
 	d := json.NewDecoder(strings.NewReader(body))
 	d.DisallowUnknownFields()
 	if err := d.Decode(out); err != nil {
@@ -74,6 +78,7 @@ func (a *App) prepareLocalDraft(ctx context.Context, draft meetings.Draft) (meet
 // Request — переходный адаптер для существующих экранов Vue.
 // Это вызов Go через Wails, HTTP-сервер и сетевой порт не открываются.
 func (a *App) Request(method, path, body string) (string, error) {
+	// Контекст ограничивает время одной операции и передаёт отмену до SQLite.
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
 	var out any = struct{}{}
@@ -332,10 +337,13 @@ func main() {
 	}
 	defer store.Close()
 	app := &App{store: store}
+	// fs.Sub меняет корень встроенной файловой системы: для asset server
+	// index.html оказывается в корне, хотя физически встроен в каталоге ui.
 	ui, err := fs.Sub(assets, "ui")
 	if err != nil {
 		panic(err)
 	}
+	// Bind публикует экспортируемые методы App в JavaScript bridge WebView2.
 	err = wails.Run(&options.App{Title: "PoDolyam — разделим счёт", Width: 1120, Height: 820, MinWidth: 640, MinHeight: 600, WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{Assets: ui}, OnStartup: app.startup, Bind: []interface{}{app},
 		SingleInstanceLock: &options.SingleInstanceLock{UniqueId: "16ae03dd-7b4e-4c0a-baa4-0288660f69dc"},

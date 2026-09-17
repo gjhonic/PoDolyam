@@ -64,6 +64,8 @@ func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
 	}
+	// sql.Open создаёт управляемый database/sql пул. Реальное соединение будет
+	// проверено первыми PRAGMA и запросами миграции ниже.
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -73,6 +75,8 @@ func Open(path string) (*Store, error) {
 	if _, err = db.Exec("PRAGMA busy_timeout=5000"); err != nil {
 		return fail(err)
 	}
+	// user_version — одно целое число внутри SQLite-файла. Оно позволяет
+	// последовательно обновлять локальную схему без отдельной таблицы миграций.
 	var version int
 	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
@@ -240,6 +244,8 @@ func (s *Store) GetFriend(ctx context.Context, id string) (FriendDetails, error)
 		return FriendDetails{}, err
 	}
 	detail.Stats.Meetings = []FriendMeeting{}
+	// Встречи хранятся документами JSON. Для локального объёма проще один раз
+	// прочитать их и собрать статистику Go-кодом, сохранив денежную логику в money.
 	rows, err := s.db.QueryContext(ctx, "SELECT payload FROM meetings ORDER BY json_extract(payload,'$.date') DESC,created_at DESC,id")
 	if err != nil {
 		return FriendDetails{}, err
@@ -469,10 +475,14 @@ func (s *Store) Create(ctx context.Context, d meetings.Draft) (meetings.Meeting,
 
 // Копия документа живёт только внутри транзакции. Ошибка callback не меняет БД.
 func (s *Store) change(ctx context.Context, id string, fn func(*meetings.Meeting) error) error {
+	// Callback меняет обычную Go-структуру, а функция единообразно пересчитывает
+	// остатки и сохраняет документ в рамках одной SQL-транзакции.
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
+	// Rollback безопасно вызывать и после Commit: после успешного коммита он
+	// вернёт sql.ErrTxDone, который здесь намеренно не используется.
 	defer tx.Rollback()
 	var data string
 	err = tx.QueryRowContext(ctx, "SELECT payload FROM meetings WHERE id=?", id).Scan(&data)
@@ -506,6 +516,8 @@ func (s *Store) Save(ctx context.Context, id string, version int64, d meetings.D
 		return err
 	}
 	return s.change(ctx, id, func(m *meetings.Meeting) error {
+		// Version реализует optimistic locking: старый экран не перезапишет
+		// изменения, сохранённые после того, как он загрузил встречу.
 		if m.State != "draft" || m.Version != version {
 			return meetings.ErrConflict
 		}
@@ -537,6 +549,8 @@ func (s *Store) Save(ctx context.Context, id string, version int64, d meetings.D
 }
 func (s *Store) Finalize(ctx context.Context, id string, version int64) error {
 	return s.change(ctx, id, func(m *meetings.Meeting) error {
+		// Version реализует optimistic locking: старый экран не перезапишет
+		// изменения, сохранённые после того, как он загрузил встречу.
 		if m.State != "draft" || m.Version != version {
 			return meetings.ErrConflict
 		}
@@ -555,6 +569,8 @@ func (s *Store) Pay(ctx context.Context, id, participant string, amount int64) e
 		if m.State != "finalized" {
 			return meetings.ErrConflict
 		}
+		// Проверка находится внутри той же транзакции, что и запись платежа:
+		// два последовательных сохранения не смогут вместе превысить остаток.
 		left, ok := m.Remaining[participant]
 		if !ok {
 			return meetings.ErrNotFound
@@ -575,6 +591,8 @@ func (s *Store) Cancel(ctx context.Context, id, payment, reason string) error {
 		if m.State != "finalized" {
 			return meetings.ErrConflict
 		}
+		// Итерируемся по индексам, чтобы получить указатель на элемент среза.
+		// Переменная range по значению была бы копией и не изменила бы Payment.
 		for i := range m.Payments {
 			p := &m.Payments[i]
 			if p.ID == payment && p.CancelledAt == nil {

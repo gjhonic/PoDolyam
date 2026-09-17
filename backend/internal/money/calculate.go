@@ -24,6 +24,8 @@ func Calculate(bill Bill) (Result, error) {
 	if bill.ReceiptTotal != nil && (*bill.ReceiptTotal < 0 || *bill.ReceiptTotal > MaxAmount) {
 		return Result{}, invalid("receipt_total", "сумма чека вне допустимого диапазона")
 	}
+	// Непустые срезы создаются заранее, чтобы JSON содержал [] вместо null.
+	// Для frontend это избавляет от отдельных проверок на отсутствующий массив.
 	result := Result{
 		Algorithm:     AlgorithmVersion,
 		Lines:         make([]Line, 0, len(bill.Items)),
@@ -64,6 +66,8 @@ func Calculate(bill Bill) (Result, error) {
 		}
 		result.Lines = append(result.Lines, line)
 	}
+	// append в новый nil-срез копирует элементы. Так сортировка не меняет
+	// входной Bill: срезы в Go могут разделять один backing array.
 	ordered := append([]Participant(nil), bill.Participants...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Order < ordered[j].Order })
 	var repay int64
@@ -82,6 +86,8 @@ func Calculate(bill Bill) (Result, error) {
 	if bill.PayerID != "" {
 		result.ToRepay = &repay
 	}
+	// Blockers описывают допустимый, но незавершённый черновик. Ошибка выше
+	// означает некорректные данные, а blocker — недостающий шаг пользователя.
 	if len(index) == 0 {
 		result.Blockers = append(result.Blockers, NoParticipants)
 	}
@@ -106,6 +112,7 @@ func lineAmount(item Item) (int64, error) {
 	if item.Quantity <= 0 || item.Quantity > MaxFactor {
 		return 0, invalid("items.quantity", "количество должно быть от 1 до 1000000")
 	}
+	// Указатель отличает «поле не заполнено» от явно введённой нулевой цены.
 	if item.UnitPrice == nil {
 		return 0, invalid("items.unit_price", "введите цену, включая 0 для бесплатной позиции")
 	}

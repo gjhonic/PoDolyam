@@ -37,6 +37,7 @@ type Meeting struct {
 	Version   int64            `json:"version"`
 	State     string           `json:"state"`
 	Currency  string           `json:"currency"`
+	// Встроенное поле Draft продвигает его поля в Meeting и сохраняет плоский JSON.
 	Draft
 	Calculation money.Result `json:"calculation"`
 	Payments    []Payment    `json:"payments"`
@@ -67,6 +68,7 @@ func ValidateDraft(d Draft) error {
 			return ErrInvalid
 		}
 	}
+	// Денежный пакет остаётся единственным местом полной проверки счёта.
 	_, err = money.Calculate(d.Bill)
 	return err
 }

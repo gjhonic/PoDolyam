@@ -66,9 +66,13 @@ func Build(data Data, regularFont, boldFont string) ([]byte, error) {
 		return nil, fmt.Errorf("жирный шрифт Windows: %w", err)
 	}
 
+	// gopdf работает в типографских пунктах. y растёт сверху вниз, поэтому
+	// достаточно хранить один курсор и заранее проверять остаток страницы.
 	const left, right, top, bottom = 44.0, 551.0, 44.0, 797.0
 	y := top
 	page := 0
+	// Замыкания addPage, ensure и write разделяют курсор y и номер страницы.
+	// Это небольшой локальный layout API без отдельного состояния-структуры.
 	addPage := func() error {
 		pdf.AddPage()
 		page++
