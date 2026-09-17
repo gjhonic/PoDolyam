@@ -78,9 +78,6 @@ func (a *App) Request(method, path, body string) (string, error) {
 	defer cancel()
 	var out any = struct{}{}
 	var err error
-	if method == "GET" && path == "/api/auth/session" {
-		return `{"csrf":"","user":{"id":"local","email":"Локальный профиль Windows"}}`, nil
-	}
 	if path == "/api/profile" {
 		switch method {
 		case "GET":

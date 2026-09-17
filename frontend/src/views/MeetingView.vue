@@ -1,8 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { request, message } from '../api'
-import { isDesktop, desktop, copyText } from '../desktop'
+import { desktop, copyText } from '../desktop'
 import { rubles, inputRubles, parseRubles } from '../money'
 import { participantFromFriend } from '../participants'
 import type { Assignment, Bill, Friend, Item, Meeting } from '../types'
@@ -15,7 +15,7 @@ const meeting = ref<Meeting | null>(null)
 const loading = ref(true), busy = ref(false), dirty = ref(false), error = ref(''), notice = ref('')
 const newName = ref(''), receipt = ref(''), paymentText = ref(''), paymentPerson = ref('')
 const friends = ref<Friend[]>([])
-const prices = ref<Record<string, string>>({}), reasons = ref<Record<string, string>>({}), links = ref<Record<string, string>>({})
+const prices = ref<Record<string, string>>({}), reasons = ref<Record<string, string>>({})
 const stateNames = { draft: 'Черновик', finalized: 'Зафиксировано', closed: 'Закрыто' }
 const blockerNames: Record<string, string> = {
   no_participants: 'Добавьте участников', no_payer: 'Организатор не определён', no_items: 'Добавьте позиции',
@@ -53,7 +53,7 @@ async function load() {
   loading.value = true
   try {
     meeting.value = await request<Meeting>(base)
-    if (isDesktop) friends.value = await request<Friend[]>('/api/friends')
+    friends.value = await request<Friend[]>('/api/friends')
     meeting.value.description ??= ''
     receipt.value = inputRubles(meeting.value.bill.receipt_total)
     prices.value = Object.fromEntries(meeting.value.bill.items.map(i => [i.id, inputRubles(i.unit_price)]))
@@ -139,13 +139,6 @@ async function pay() {
 async function cancel(id: string) {
   await perform(async () => { await request(base + '/payments/' + id + '/cancel', 'POST', { reason: reasons.value[id] }); await load() })
 }
-async function personalLink(id: string, revoke: boolean) {
-  await perform(async () => {
-    const result = await request<{ token: string }>(base + '/links', 'POST', { participant_id: id, revoke })
-    if (revoke) { delete links.value[id]; notice.value = 'Ссылки участника отозваны' }
-    else { links.value[id] = location.origin + '/s/' + result.token; notice.value = 'Новая ссылка создана; предыдущая отозвана' }
-  })
-}
 async function exportPersonal(id: string) {
   await perform(async () => {
     const path = await desktop().ExportParticipantPDF(meeting.value!.id, id)
@@ -159,7 +152,7 @@ async function copyMessage(id: string) {
       const share = line.shares.find(s => s.participant_id === id)
       return share ? [itemName(line.item_id) + ': ' + rubles(share.amount)] : []
     })
-    await copyText([m.title, name(id), ...lines, 'Всего: ' + rubles(total.amount), 'Осталось вернуть: ' + rubles(m.remaining[id] ?? 0), links.value[id] ?? ''].filter(Boolean).join('\n'))
+    await copyText([m.title, name(id), ...lines, 'Всего: ' + rubles(total.amount), 'Осталось вернуть: ' + rubles(m.remaining[id] ?? 0)].filter(Boolean).join('\n'))
     notice.value = 'Сообщение скопировано. Отправьте его участнику самостоятельно.'
   })
 }
@@ -359,7 +352,6 @@ onBeforeRouteLeave(() => !dirty.value || window.confirm('Есть несохра
               </button>
             </div>
             <div
-              v-if="isDesktop"
               class="friend-picker"
             >
               <div>
@@ -762,25 +754,10 @@ onBeforeRouteLeave(() => !dirty.value || window.confirm('Есть несохра
                       type="button"
                       :disabled="busy"
                       class="mini-button receipt-button"
-                      @click="isDesktop ? exportPersonal(total.participant_id) : personalLink(total.participant_id, false)"
+                      @click="exportPersonal(total.participant_id)"
                     >
-                      {{ isDesktop ? 'Сформировать чек PDF' : 'Новая ссылка' }}
+                      Сформировать чек PDF
                     </button>
-                    <button
-                      v-if="!isDesktop"
-                      type="button"
-                      :disabled="busy"
-                      class="mini-button"
-                      @click="personalLink(total.participant_id, true)"
-                    >
-                      Отозвать
-                    </button>
-                    <a
-                      v-if="links[total.participant_id]"
-                      :href="links[total.participant_id]"
-                      target="_blank"
-                      rel="noreferrer"
-                    >Открыть расчёт</a>
                   </div>
                   <small v-else>PDF доступен после фиксации</small>
                 </td>

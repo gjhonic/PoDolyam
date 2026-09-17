@@ -1,5 +1,0 @@
-extends:
-  - recommended
-rules:
-  no-server-example.com: off
-  no-server-trailing-slash: error

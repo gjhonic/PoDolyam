@@ -52,18 +52,6 @@ func TestLocalLifecycle(t *testing.T) {
 	if _, err = s.db.Exec("UPDATE meetings SET payload=json_set(payload,'$.description','Другое') WHERE id=?", m.ID); err == nil {
 		t.Fatal("триггер разрешил изменение описания зафиксированной встречи")
 	}
-	personal, err := s.Personal(ctx, m.ID, "dima")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if personal.Total != 152168 || personal.Remaining != 152168 {
-		t.Fatalf("%+v", personal)
-	}
-	for _, line := range personal.Lines {
-		if line.Name == "Токпоки Карбонара" {
-			t.Fatal("раскрыта чужая доля")
-		}
-	}
 	if err = s.Pay(ctx, m.ID, "dima", 100); err != nil {
 		t.Fatal(err)
 	}

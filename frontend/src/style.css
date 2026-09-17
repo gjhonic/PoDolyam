@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   font-family: Inter, "Segoe UI", Arial, sans-serif;
   color: #151515;
   background: #ebe7dd;
@@ -168,7 +168,6 @@ p { line-height: 1.55; }
   background: var(--paper);
   box-shadow: var(--shadow);
 }
-.narrow { max-width: 560px; margin: 35px auto; }
 fieldset { border: 0; min-width: 0; margin: 0; padding: 0; }
 legend { margin-bottom: 12px; font-size: 1.2rem; font-weight: 900; }
 label { display: block; margin: 15px 0 7px; font-size: 13px; font-weight: 900; letter-spacing: .035em; text-transform: uppercase; }
@@ -210,7 +209,6 @@ button.secondary, button.chip, .mini-button {
 button.chip[aria-pressed="true"] { background: var(--yellow); }
 button.accent-pink { background: var(--pink); color: var(--ink); box-shadow: 4px 4px 0 var(--ink); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.spread { justify-content: space-between; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .group-card { background: linear-gradient(135deg, var(--paper) 0 76%, #57d9ff50 76%); }
 .people-grid { display: grid; gap: 12px; }
@@ -334,8 +332,6 @@ button.mini-button { min-height: 32px; margin-top: 6px; padding: 4px 7px; font-s
 .meeting-list a { display: inline-block; padding: 8px 0; font-family: Impact, sans-serif; font-size: 26px; text-transform: uppercase; }
 .intro { max-width: 760px; padding: 36px 0 48px; }
 .lead { max-width: 630px; font-size: 18px; }
-.steps { display: grid; gap: 16px; padding: 0; list-style: none; }
-.steps li { border: var(--line); padding: 24px; background: var(--paper); box-shadow: 5px 5px 0 var(--ink); }
 
 @media (max-width: 900px) {
   .dish-grid, .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

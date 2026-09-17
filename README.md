@@ -164,7 +164,6 @@ Copy-Item .env.example .env
 | Frontend | Vue 3, TypeScript, Vite, Vue Router |
 | PDF | `gopdf` + системный Unicode-шрифт Windows |
 | Проверки | Go test, fuzz-тесты, Vitest, ESLint, vue-tsc |
-| Сохранённый web-прототип | `net/http`, PostgreSQL, pgx, OpenAPI, Docker Compose |
 
 ---
 

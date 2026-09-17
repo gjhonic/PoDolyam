@@ -7,9 +7,9 @@ Windows-приложение разделения ресторанного сч�
 - `backend/` — Go, Wails, SQLite; денежное ядро отдельно от хранения и окна.
 - `frontend/` — Vue 3, TypeScript, Vite, Vue Router.
 - `docs/` — продукт, решения, контракт и состояние этапов.
-- `deploy/`, `.github/workflows/` — окружение и проверки.
+- `.github/workflows/` — проверки Windows-сборки и денежного ядра.
 - `make help`, `make test`, `make build` — публичные команды Windows.
-- Основная разработка — Windows 11, PowerShell, нативные Go, Node и GNU Make. WSL не требуется. Compose относится к сохранённому web-прототипу.
+- Основная разработка — Windows 11, PowerShell, нативные Go, Node и GNU Make. WSL, Docker и отдельный сервер не требуются.
 
 ## Перед работой
 

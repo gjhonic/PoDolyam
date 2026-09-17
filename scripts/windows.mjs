@@ -6,7 +6,7 @@ import path from 'node:path'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const task = process.argv[2] ?? 'build'
 if (process.platform !== 'win32') throw new Error('Используйте нативные Go и Node в Windows')
-if (!['install', 'test', 'build', 'run'].includes(task)) throw new Error('Команды: install, test, build, run')
+if (!['install', 'test', 'build'].includes(task)) throw new Error('Команды: install, test, build')
 const backend = path.join(root, 'backend')
 const frontend = path.join(root, 'frontend')
 function envValue(name) {
@@ -50,7 +50,7 @@ if (task === 'install') {
   npm(['run', 'lint'])
   npm(['test'])
 } else {
-  npm(['run', 'build'], { ...process.env, VITE_DESKTOP: 'true', VITE_APP_VERSION: appVersion })
+  npm(['run', 'build'], { ...process.env, VITE_APP_VERSION: appVersion })
   const target = path.resolve(backend, 'cmd/desktop/ui')
   const expected = path.resolve(backend, 'cmd/desktop')
   // Удаляется исключительно генерируемая копия UI внутри текущего проекта.

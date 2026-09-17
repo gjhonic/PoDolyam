@@ -20,10 +20,6 @@ func TestDesktopBridge(t *testing.T) {
 	}
 	defer store.Close()
 	app := &App{ctx: context.Background(), store: store}
-	session, err := app.Request("GET", "/api/auth/session", "")
-	if err != nil || !json.Valid([]byte(session)) {
-		t.Fatalf("session: %s %v", session, err)
-	}
 	profileJSON, err := app.Request("PUT", "/api/profile", `{"name":"Женя","phone":"+7 999 123-45-67","bank":"Т-Банк"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -103,8 +99,8 @@ func TestDesktopBridge(t *testing.T) {
 			t.Fatalf("accepted invalid JSON: %s", body)
 		}
 	}
-	if _, err := app.Request("POST", "/api/auth/register", "{}"); err == nil {
-		t.Fatal("desktop must not register server accounts")
+	if _, err := app.Request("POST", "/api/unknown", "{}"); err == nil {
+		t.Fatal("accepted unknown desktop action")
 	}
 	if _, err := app.Request("POST", "/api/meetings/"+meeting.ID+"/finalize", `{"version":1}`); err == nil {
 		t.Fatal("empty draft finalized")

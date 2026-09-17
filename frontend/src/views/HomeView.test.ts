@@ -6,11 +6,8 @@ const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   push: vi.fn(),
 }))
-vi.mock('../desktop', () => ({ isDesktop: true }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.push }) }))
 vi.mock('../api', () => ({
-  currentUser: { value: { id: 'local', email: 'Локальный профиль Windows' } },
-  loadSession: vi.fn(),
   request: mocks.request,
   message: (error: unknown) => error instanceof Error ? error.message : String(error),
 }))
