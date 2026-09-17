@@ -179,7 +179,7 @@ func TestMigratesVersionOneDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	var version int
-	if err = s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+	if err = s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 4 {
 		t.Fatalf("версия схемы: %d, %v", version, err)
 	}
 }
@@ -190,11 +190,11 @@ func TestFriendsLifecycle(t *testing.T) {
 	if _, err := s.SaveFriend(ctx, Friend{Name: "Дима", Phone: "+7 900", Birthday: "17 сентября"}); err == nil {
 		t.Fatal("принята некорректная дата")
 	}
-	friend, err := s.SaveFriend(ctx, Friend{Name: " Дима ", Phone: " +7 900 000-00-00 ", Birthday: "1990-09-17"})
+	friend, err := s.SaveFriend(ctx, Friend{Name: " Дима ", Birthday: "1990-09-17", Description: " Любит азиатскую кухню "})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if friend.ID == "" || friend.Name != "Дима" {
+	if friend.ID == "" || friend.Name != "Дима" || friend.Description != "Любит азиатскую кухню" || friend.Phone != "" {
 		t.Fatalf("друг не нормализован: %+v", friend)
 	}
 	friend.Phone = "+7 901 111-11-11"
@@ -210,6 +210,65 @@ func TestFriendsLifecycle(t *testing.T) {
 	}
 	if err = s.DeleteFriend(ctx, friend.ID); !errors.Is(err, meetings.ErrNotFound) {
 		t.Fatalf("повторное удаление: %v", err)
+	}
+}
+
+func TestFriendDetailsAndStats(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	friend, err := s.SaveFriend(ctx, Friend{ID: "dima", Name: "Дима", Description: "Друг со школы"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := meetings.Draft{Title: "Ужин", Date: "2026-09-17", Venue: "Токио-City", Bill: demo.Restaurant()}
+	meeting, err := s.Create(ctx, draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Finalize(ctx, meeting.ID, meeting.Version); err != nil {
+		t.Fatal(err)
+	}
+	draft.Title = "Следующий ужин"
+	draft.Date = "2026-10-01"
+	if _, err = s.Create(ctx, draft); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := s.GetFriend(ctx, friend.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Friend.Description != "Друг со школы" || detail.Stats.MeetingCount != 2 || detail.Stats.ConfirmedCount != 1 {
+		t.Fatalf("карточка друга: %+v", detail)
+	}
+	if detail.Stats.TotalSpent != 152168 || detail.Stats.AverageSpent != 152168 || detail.Stats.BiggestSpent != 152168 || detail.Stats.Outstanding != 152168 {
+		t.Fatalf("денежная статистика: %+v", detail.Stats)
+	}
+	if len(detail.Stats.Meetings) != 2 || detail.Stats.Meetings[1].ItemCount == 0 {
+		t.Fatalf("история встреч: %+v", detail.Stats.Meetings)
+	}
+}
+
+func TestMigratesVersionThreeFriends(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v3.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE meetings(id TEXT PRIMARY KEY,payload TEXT NOT NULL CHECK(json_valid(payload)),created_at TEXT NOT NULL); CREATE TABLE friends(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,birthday TEXT NOT NULL,created_at TEXT NOT NULL); INSERT INTO friends(id,name,phone,birthday,created_at) VALUES('dima','Дима','','','now'); PRAGMA user_version=3;`)
+	if closeErr := db.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	detail, err := s.GetFriend(context.Background(), "dima")
+	if err != nil || detail.Friend.Description != "" {
+		t.Fatalf("миграция описания: %+v %v", detail, err)
 	}
 }
 

@@ -30,7 +30,7 @@ func TestBuildPersonalReceipt(t *testing.T) {
 	regular, bold := testFonts(t)
 	data := Data{
 		Meeting: "Ужин после релиза", Date: "17.09.2026", Venue: "Нэко", Participant: "Дима", Payer: "Женя",
-		Phone: "+7 999 123-45-67", Bank: "Т-Банк", Total: 152168, Debt: 152168, Received: 50000, Remaining: 102168,
+		Phone: "+79991234567", Bank: "Т-Банк", Total: 152168, Debt: 152168, Received: 50000, Remaining: 102168,
 		CreatedAt: time.Date(2026, 9, 17, 14, 30, 0, 0, time.Local),
 		Lines:     []Line{{Name: "Рамен со свининой", FullAmount: 46000, Rule: "одному", Share: 46000}, {Name: "Гавайская пицца", FullAmount: 68000, Rule: "на всех", Share: 11334}, {Name: "Нэко сет", FullAmount: 99000, Rule: "на всех", Share: 16500}},
 	}
@@ -55,5 +55,19 @@ func TestBuildRequiresParticipant(t *testing.T) {
 	regular, bold := testFonts(t)
 	if _, err := Build(Data{Meeting: "Ужин"}, regular, bold); err == nil {
 		t.Fatal("создан безымянный чек")
+	}
+}
+
+func TestFormatPhone(t *testing.T) {
+	tests := map[string]string{
+		"+79247595040":      "+7 924 759-50-40",
+		"8 (999) 123-45-67": "+7 999 123-45-67",
+		"12345":             "12345",
+		"   ":               "не указано",
+	}
+	for input, want := range tests {
+		if got := formatPhone(input); got != want {
+			t.Errorf("formatPhone(%q) = %q, want %q", input, got, want)
+		}
 	}
 }

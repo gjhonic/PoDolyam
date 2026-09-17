@@ -35,7 +35,7 @@ func TestDesktopBridge(t *testing.T) {
 	if _, err = app.Request("PUT", "/api/profile", `{"name":"Женя","phone":"","bank":"Т-Банк"}`); err == nil {
 		t.Fatal("accepted profile without phone")
 	}
-	friendJSON, err := app.Request("POST", "/api/friends", `{"id":"","name":"Дима","phone":"+7 900","birthday":"1990-09-17"}`)
+	friendJSON, err := app.Request("POST", "/api/friends", `{"id":"","name":"Дима","phone":"","birthday":"","description":""}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +46,14 @@ func TestDesktopBridge(t *testing.T) {
 	friendsJSON, err := app.Request("GET", "/api/friends", "")
 	if err != nil || !strings.Contains(friendsJSON, friend.ID) {
 		t.Fatalf("friends: %s %v", friendsJSON, err)
+	}
+	detailJSON, err := app.Request("GET", "/api/friends/"+friend.ID, "")
+	if err != nil || !strings.Contains(detailJSON, "meeting_count") {
+		t.Fatalf("friend details: %s %v", detailJSON, err)
+	}
+	updatedJSON, err := app.Request("PUT", "/api/friends/"+friend.ID, `{"id":"","name":"Дмитрий","phone":"+7 901","birthday":"1990-09-17","description":"Друг"}`)
+	if err != nil || !strings.Contains(updatedJSON, "Дмитрий") {
+		t.Fatalf("update friend: %s %v", updatedJSON, err)
 	}
 	if _, err = app.Request("DELETE", "/api/friends/"+friend.ID, ""); err != nil {
 		t.Fatal(err)

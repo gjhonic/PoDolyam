@@ -102,12 +102,29 @@ func (a *App) Request(method, path, body string) (string, error) {
 		default:
 			err = errors.New("неподдерживаемое действие")
 		}
-	} else if method == "DELETE" && strings.HasPrefix(path, "/api/friends/") {
+	} else if strings.HasPrefix(path, "/api/friends/") {
 		id := strings.TrimPrefix(path, "/api/friends/")
 		if id == "" || strings.Contains(id, "/") {
 			err = errors.New("неизвестное действие")
 		} else {
-			err = a.store.DeleteFriend(ctx, id)
+			switch method {
+			case "GET":
+				out, err = a.store.GetFriend(ctx, id)
+			case "PUT":
+				var friend local.Friend
+				if err = decode(body, &friend); err == nil {
+					if friend.ID != "" && friend.ID != id {
+						err = errors.New("идентификатор друга не совпадает")
+					} else {
+						friend.ID = id
+						out, err = a.store.SaveFriend(ctx, friend)
+					}
+				}
+			case "DELETE":
+				err = a.store.DeleteFriend(ctx, id)
+			default:
+				err = errors.New("неподдерживаемое действие")
+			}
 		}
 	} else if path == "/api/meetings" {
 		switch method {
@@ -319,7 +336,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = wails.Run(&options.App{Title: "PoDolyam — разделим счёт", Width: 1120, Height: 820, MinWidth: 640, MinHeight: 600,
+	err = wails.Run(&options.App{Title: "PoDolyam — разделим счёт", Width: 1120, Height: 820, MinWidth: 640, MinHeight: 600, WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{Assets: ui}, OnStartup: app.startup, Bind: []interface{}{app},
 		SingleInstanceLock: &options.SingleInstanceLock{UniqueId: "16ae03dd-7b4e-4c0a-baa4-0288660f69dc"},
 		Windows:            &windows.Options{WebviewUserDataPath: filepath.Join(dir, "WebView2")},

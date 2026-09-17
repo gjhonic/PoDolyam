@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { request, message } from '../api'
 import { organizerParticipant } from '../participants'
 import type { Friend, Meeting, TransferProfile } from '../types'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(true), busy = ref(false), error = ref(''), notice = ref('')
 const title = ref(''), date = ref(new Date().toLocaleDateString('en-CA'))
 type MeetingSummary = { id: string; title: string; date: string; state: string }
 const list = ref<MeetingSummary[]>([])
 const deleteTarget = ref<MeetingSummary | null>(null)
-const mainSection = ref<'meetings' | 'friends' | 'profile'>('meetings')
+const mainSection = ref<'meetings' | 'friends' | 'profile'>(route.query.section === 'friends' ? 'friends' : 'meetings')
 const profile = ref<TransferProfile>({ name: '', phone: '', bank: '' })
 const friends = ref<Friend[]>([])
-const friendForm = ref<Friend>({ id: '', name: '', phone: '', birthday: '' })
+const friendName = ref('')
 const stateNames: Record<string, string> = { draft: 'Черновик', finalized: 'Зафиксировано', closed: 'Закрыто' }
 
 async function refresh() {
@@ -43,18 +44,15 @@ async function create() {
   } catch (e) { error.value = message(e) }
   finally { busy.value = false }
 }
-function editFriend(friend: Friend) { friendForm.value = { ...friend }; mainSection.value = 'friends' }
 async function saveFriend() {
   if (busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
   try {
-    const saved = await request<Friend>('/api/friends', 'POST', friendForm.value)
-    const index = friends.value.findIndex(friend => friend.id === saved.id)
-    if (index === -1) friends.value.push(saved)
-    else friends.value[index] = saved
+    const saved = await request<Friend>('/api/friends', 'POST', { name: friendName.value })
+    friends.value.push(saved)
     friends.value.sort((left, right) => left.name.localeCompare(right.name, 'ru'))
-    friendForm.value = { id: '', name: '', phone: '', birthday: '' }
-    notice.value = 'Друг сохранён и доступен при добавлении участников.'
+    friendName.value = ''
+    notice.value = 'Друг добавлен. Телефон, день рождения и описание можно заполнить в его карточке.'
   } catch (e) { error.value = message(e) }
   finally { busy.value = false }
 }
@@ -64,14 +62,9 @@ async function deleteFriend(friend: Friend) {
   try {
     await request('/api/friends/' + encodeURIComponent(friend.id), 'DELETE')
     friends.value = friends.value.filter(item => item.id !== friend.id)
-    if (friendForm.value.id === friend.id) friendForm.value = { id: '', name: '', phone: '', birthday: '' }
     notice.value = 'Друг удалён из справочника.'
   } catch (e) { error.value = message(e) }
   finally { busy.value = false }
-}
-function birthdayLabel(value: string) {
-  if (!value) return 'День рождения не указан'
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(new Date(value + 'T12:00:00'))
 }
 async function deleteMeeting() {
   if (busy.value || !deleteTarget.value) return
@@ -234,40 +227,20 @@ onMounted(refresh)
         <fieldset :disabled="busy">
           <p class="eyebrow">
             Люди рядом
-          </p><h2>{{ friendForm.id ? 'Изменить друга' : 'Новый друг' }}</h2>
+          </p><h2>Добавить друга</h2>
+          <p class="hint">
+            Для начала достаточно имени. Остальные данные заполняются в личной карточке.
+          </p>
           <label for="friend-name">Имя</label><input
             id="friend-name"
-            v-model="friendForm.name"
+            v-model="friendName"
             required
             maxlength="120"
             placeholder="Дима"
           >
-          <label for="friend-phone">Номер телефона</label><input
-            id="friend-phone"
-            v-model="friendForm.phone"
-            type="tel"
-            autocomplete="tel"
-            required
-            maxlength="40"
-            placeholder="+7 999 123-45-67"
-          >
-          <label for="friend-birthday">День рождения</label><input
-            id="friend-birthday"
-            v-model="friendForm.birthday"
-            type="date"
-          >
-          <div class="actions">
-            <button type="submit">
-              {{ busy ? 'Сохраняем…' : 'Сохранить друга' }}
-            </button><button
-              v-if="friendForm.id"
-              type="button"
-              class="secondary"
-              @click="friendForm = { id: '', name: '', phone: '', birthday: '' }"
-            >
-              Отмена
-            </button>
-          </div>
+          <button type="submit">
+            {{ busy ? 'Добавляем…' : 'Добавить друга' }}
+          </button>
         </fieldset>
       </form>
       <div class="friend-list">
@@ -275,7 +248,7 @@ onMounted(refresh)
           v-if="friends.length === 0"
           class="empty-state"
         >
-          Список пока пуст. Сохранённые друзья появятся здесь и в форме встречи.
+          Список пока пуст. Добавьте друга, чтобы быстро приглашать его во встречи.
         </p>
         <article
           v-for="friend in friends"
@@ -285,15 +258,15 @@ onMounted(refresh)
           <div class="friend-avatar">
             {{ friend.name.slice(0, 1).toUpperCase() }}
           </div>
-          <div><h3>{{ friend.name }}</h3><p>{{ friend.phone }}</p><small>{{ birthdayLabel(friend.birthday) }}</small></div>
+          <div><h3>{{ friend.name }}</h3><p>{{ friend.description || 'Карточка пока без описания' }}</p></div>
           <div class="friend-actions">
-            <button
-              type="button"
-              class="mini-button"
-              @click="editFriend(friend)"
+            <RouterLink
+              class="button mini-button"
+              :to="'/friends/' + friend.id"
             >
-              Изменить
-            </button><button
+              Открыть
+            </RouterLink>
+            <button
               type="button"
               class="mini-button danger-button"
               @click="deleteFriend(friend)"

@@ -28,10 +28,36 @@ type TransferProfile struct {
 }
 
 type Friend struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Phone    string `json:"phone"`
-	Birthday string `json:"birthday"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Phone       string `json:"phone"`
+	Birthday    string `json:"birthday"`
+	Description string `json:"description"`
+}
+
+type FriendMeeting struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Date      string `json:"date"`
+	Venue     string `json:"venue"`
+	State     string `json:"state"`
+	Amount    int64  `json:"amount"`
+	ItemCount int    `json:"item_count"`
+}
+
+type FriendStats struct {
+	MeetingCount   int             `json:"meeting_count"`
+	ConfirmedCount int             `json:"confirmed_count"`
+	TotalSpent     int64           `json:"total_spent"`
+	AverageSpent   int64           `json:"average_spent"`
+	BiggestSpent   int64           `json:"biggest_spent"`
+	Outstanding    int64           `json:"outstanding"`
+	Meetings       []FriendMeeting `json:"meetings"`
+}
+
+type FriendDetails struct {
+	Friend Friend      `json:"friend"`
+	Stats  FriendStats `json:"stats"`
 }
 
 func Open(path string) (*Store, error) {
@@ -51,7 +77,7 @@ func Open(path string) (*Store, error) {
 	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 3 {
+	if version > 4 {
 		return fail(errors.New("база создана более новой версией PoDolyam"))
 	}
 	if version == 0 {
@@ -72,8 +98,8 @@ func Open(path string) (*Store, error) {
     json_extract(NEW.payload,'$.state')='draft')
   BEGIN SELECT RAISE(ABORT,'Зафиксированный расчёт неизменяем'); END;
   CREATE TABLE transfer_profile(id INTEGER PRIMARY KEY CHECK(id=1),name TEXT NOT NULL,phone TEXT NOT NULL,bank TEXT NOT NULL);
-  CREATE TABLE friends(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,birthday TEXT NOT NULL,created_at TEXT NOT NULL);
-  PRAGMA user_version=3;`)
+  CREATE TABLE friends(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,birthday TEXT NOT NULL,description TEXT NOT NULL,created_at TEXT NOT NULL);
+  PRAGMA user_version=4;`)
 		if err != nil {
 			return fail(err)
 		}
@@ -88,8 +114,8 @@ func Open(path string) (*Store, error) {
 		}
 		defer tx.Rollback()
 		_, err = tx.Exec(`CREATE TABLE IF NOT EXISTS transfer_profile(id INTEGER PRIMARY KEY CHECK(id=1),name TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL,bank TEXT NOT NULL);
-  CREATE TABLE friends(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,birthday TEXT NOT NULL,created_at TEXT NOT NULL);
-  PRAGMA user_version=3;`)
+  CREATE TABLE friends(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,birthday TEXT NOT NULL,description TEXT NOT NULL,created_at TEXT NOT NULL);
+  PRAGMA user_version=4;`)
 		if err != nil {
 			return fail(err)
 		}
@@ -104,9 +130,23 @@ func Open(path string) (*Store, error) {
 		}
 		defer tx.Rollback()
 		_, err = tx.Exec(`ALTER TABLE transfer_profile ADD COLUMN name TEXT NOT NULL DEFAULT '';
-  CREATE TABLE friends(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,birthday TEXT NOT NULL,created_at TEXT NOT NULL);
-  PRAGMA user_version=3;`)
+  CREATE TABLE friends(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,birthday TEXT NOT NULL,description TEXT NOT NULL,created_at TEXT NOT NULL);
+  PRAGMA user_version=4;`)
 		if err != nil {
+			return fail(err)
+		}
+		if err = tx.Commit(); err != nil {
+			return fail(err)
+		}
+	}
+	if version == 3 {
+		tx, err := db.Begin()
+		if err != nil {
+			return fail(err)
+		}
+		defer tx.Rollback()
+		if _, err = tx.Exec(`ALTER TABLE friends ADD COLUMN description TEXT NOT NULL DEFAULT '';
+  PRAGMA user_version=4;`); err != nil {
 			return fail(err)
 		}
 		if err = tx.Commit(); err != nil {
@@ -149,7 +189,8 @@ func validateFriend(friend Friend) (Friend, error) {
 	friend.Name = strings.TrimSpace(friend.Name)
 	friend.Phone = strings.TrimSpace(friend.Phone)
 	friend.Birthday = strings.TrimSpace(friend.Birthday)
-	if friend.Name == "" || friend.Phone == "" || len([]rune(friend.Name)) > 120 || len([]rune(friend.Phone)) > 40 {
+	friend.Description = strings.TrimSpace(friend.Description)
+	if friend.Name == "" || len([]rune(friend.Name)) > 120 || len([]rune(friend.Phone)) > 40 || len([]rune(friend.Description)) > 2000 {
 		return Friend{}, meetings.ErrInvalid
 	}
 	if friend.Birthday != "" {
@@ -161,7 +202,7 @@ func validateFriend(friend Friend) (Friend, error) {
 }
 
 func (s *Store) ListFriends(ctx context.Context) ([]Friend, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,name,phone,birthday FROM friends ORDER BY name,id")
+	rows, err := s.db.QueryContext(ctx, "SELECT id,name,phone,birthday,description FROM friends ORDER BY name,id")
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +210,7 @@ func (s *Store) ListFriends(ctx context.Context) ([]Friend, error) {
 	friends := []Friend{}
 	for rows.Next() {
 		var friend Friend
-		if err = rows.Scan(&friend.ID, &friend.Name, &friend.Phone, &friend.Birthday); err != nil {
+		if err = rows.Scan(&friend.ID, &friend.Name, &friend.Phone, &friend.Birthday, &friend.Description); err != nil {
 			return nil, err
 		}
 		friends = append(friends, friend)
@@ -185,8 +226,77 @@ func (s *Store) SaveFriend(ctx context.Context, friend Friend) (Friend, error) {
 	if friend.ID == "" {
 		friend.ID = uuid.NewString()
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO friends(id,name,phone,birthday,created_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,birthday=excluded.birthday`, friend.ID, friend.Name, friend.Phone, friend.Birthday, time.Now().UTC().Format(time.RFC3339Nano))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO friends(id,name,phone,birthday,description,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,birthday=excluded.birthday,description=excluded.description`, friend.ID, friend.Name, friend.Phone, friend.Birthday, friend.Description, time.Now().UTC().Format(time.RFC3339Nano))
 	return friend, err
+}
+
+func (s *Store) GetFriend(ctx context.Context, id string) (FriendDetails, error) {
+	var detail FriendDetails
+	err := s.db.QueryRowContext(ctx, "SELECT id,name,phone,birthday,description FROM friends WHERE id=?", id).Scan(&detail.Friend.ID, &detail.Friend.Name, &detail.Friend.Phone, &detail.Friend.Birthday, &detail.Friend.Description)
+	if errors.Is(err, sql.ErrNoRows) {
+		return FriendDetails{}, meetings.ErrNotFound
+	}
+	if err != nil {
+		return FriendDetails{}, err
+	}
+	detail.Stats.Meetings = []FriendMeeting{}
+	rows, err := s.db.QueryContext(ctx, "SELECT payload FROM meetings ORDER BY json_extract(payload,'$.date') DESC,created_at DESC,id")
+	if err != nil {
+		return FriendDetails{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var data string
+		if err = rows.Scan(&data); err != nil {
+			return FriendDetails{}, err
+		}
+		meeting, decodeErr := decode(data)
+		if decodeErr != nil {
+			return FriendDetails{}, decodeErr
+		}
+		present := false
+		for _, participant := range meeting.Bill.Participants {
+			if participant.ID == id {
+				present = true
+				break
+			}
+		}
+		if !present {
+			continue
+		}
+		event := FriendMeeting{ID: meeting.ID, Title: meeting.Title, Date: meeting.Date, Venue: meeting.Venue, State: meeting.State}
+		for _, total := range meeting.Calculation.Totals {
+			if total.ParticipantID == id {
+				event.Amount = total.Amount
+				break
+			}
+		}
+		for _, line := range meeting.Calculation.Lines {
+			for _, share := range line.Shares {
+				if share.ParticipantID == id {
+					event.ItemCount++
+					break
+				}
+			}
+		}
+		detail.Stats.MeetingCount++
+		detail.Stats.Meetings = append(detail.Stats.Meetings, event)
+		if meeting.State != "draft" {
+			detail.Stats.ConfirmedCount++
+			detail.Stats.TotalSpent += event.Amount
+			detail.Stats.Outstanding += meeting.Remaining[id]
+			if event.Amount > detail.Stats.BiggestSpent {
+				detail.Stats.BiggestSpent = event.Amount
+			}
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return FriendDetails{}, err
+	}
+	if detail.Stats.ConfirmedCount > 0 {
+		detail.Stats.AverageSpent = detail.Stats.TotalSpent / int64(detail.Stats.ConfirmedCount)
+	}
+	return detail, nil
 }
 
 func (s *Store) DeleteFriend(ctx context.Context, id string) error {

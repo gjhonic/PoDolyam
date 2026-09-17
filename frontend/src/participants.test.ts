@@ -1,7 +1,7 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { organizerParticipant, participantFromFriend } from './participants'
 
-const dima = { id: 'friend-dima', name: 'Дима', phone: '+7 900', birthday: '1990-09-17' }
+const dima = { id: 'friend-dima', name: 'Дима', phone: '+7 900', birthday: '1990-09-17', description: '' }
 
 describe('участники из профиля и справочника', () => {
   it('создаёт организатора с постоянным ID плательщика', () => {

@@ -33,6 +33,24 @@ func money(value int64) string {
 	return fmt.Sprintf("%s%d,%02d руб.", sign, value/100, value%100)
 }
 
+func formatPhone(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "не указано"
+	}
+	digits := strings.Builder{}
+	for _, symbol := range value {
+		if symbol >= '0' && symbol <= '9' {
+			digits.WriteRune(symbol)
+		}
+	}
+	number := digits.String()
+	if len(number) == 11 && (number[0] == '7' || number[0] == '8') {
+		return fmt.Sprintf("+7 %s %s-%s-%s", number[1:4], number[4:7], number[7:9], number[9:11])
+	}
+	return value
+}
+
 // Build возвращает готовый PDF. Шрифты передаются путями, чтобы использовать
 // штатные Segoe UI из Windows и не хранить лицензированные TTF в репозитории.
 func Build(data Data, regularFont, boldFont string) ([]byte, error) {
@@ -199,22 +217,100 @@ func Build(data Data, regularFont, boldFont string) ([]byte, error) {
 		y += 24
 	}
 	y += 22
-	if err := write("КУДА ПЕРЕВЕСТИ", "bold", 13, 25, pink); err != nil {
+	if err := ensure(156); err != nil {
 		return nil, err
 	}
-	transfer := "Плательщик: " + data.Payer + "\nТелефон: " + data.Phone + "\nБанк: " + data.Bank
-	if err := ensure(70); err != nil {
-		return nil, err
-	}
-	if err := pdf.SetFont("regular", "", 11); err != nil {
+
+	// Реквизиты оформлены отдельной карточкой: телефон читается первым,
+	// а плательщик и банк дают контекст, кому именно уходит перевод.
+	const transferCardHeight = 132.0
+	cardY := y
+	pdf.SetFillColor(123, 92, 255)
+	pdf.RectFromUpperLeftWithStyle(left+7, cardY+7, right-left, transferCardHeight, "F")
+	pdf.SetFillColor(255, 253, 245)
+	pdf.RectFromUpperLeftWithStyle(left, cardY, right-left, transferCardHeight, "F")
+	pdf.SetStrokeColor(21, 21, 21)
+	pdf.Line(left, cardY, right, cardY)
+	pdf.Line(left, cardY+transferCardHeight, right, cardY+transferCardHeight)
+	pdf.Line(left, cardY, left, cardY+transferCardHeight)
+	pdf.Line(right, cardY, right, cardY+transferCardHeight)
+
+	pdf.SetFillColor(234, 255, 53)
+	pdf.RectFromUpperLeftWithStyle(left, cardY, right-left, 32, "F")
+	if err := pdf.SetFont("bold", "", 13); err != nil {
 		return nil, err
 	}
 	pdf.SetTextColor(black[0], black[1], black[2])
-	pdf.SetXY(left, y)
-	if err := pdf.MultiCellWithOption(&gopdf.Rect{W: right - left, H: 66}, transfer, gopdf.CellOption{Align: gopdf.Left, CoefLineHeight: 1.5}); err != nil {
+	pdf.SetXY(left+14, cardY)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: right - left - 58, H: 32}, "КУДА ПЕРЕВЕСТИ", gopdf.CellOption{Align: gopdf.Left | gopdf.Middle}); err != nil {
 		return nil, err
 	}
-	y += 70
+	pdf.SetXY(right-42, cardY)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: 28, H: 32}, "↗", gopdf.CellOption{Align: gopdf.Right | gopdf.Middle}); err != nil {
+		return nil, err
+	}
+
+	transferValue := func(value string) string {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+		return "не указано"
+	}
+	payer, phone, bank := transferValue(data.Payer), formatPhone(data.Phone), transferValue(data.Bank)
+
+	if err := pdf.SetFont("regular", "", 8); err != nil {
+		return nil, err
+	}
+	pdf.SetTextColor(gray[0], gray[1], gray[2])
+	pdf.SetXY(left+16, cardY+42)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: 310, H: 12}, "ПЛАТЕЛЬЩИК", gopdf.CellOption{Align: gopdf.Left | gopdf.Middle}); err != nil {
+		return nil, err
+	}
+	pdf.SetXY(left+16, cardY+76)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: 310, H: 12}, "ТЕЛЕФОН ДЛЯ ПЕРЕВОДА", gopdf.CellOption{Align: gopdf.Left | gopdf.Middle}); err != nil {
+		return nil, err
+	}
+
+	if err := pdf.SetFont("bold", "", 13); err != nil {
+		return nil, err
+	}
+	pdf.SetTextColor(black[0], black[1], black[2])
+	pdf.SetXY(left+16, cardY+52)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: 310, H: 20}, payer, gopdf.CellOption{Align: gopdf.Left | gopdf.Middle}); err != nil {
+		return nil, err
+	}
+	if err := pdf.SetFont("bold", "", 17); err != nil {
+		return nil, err
+	}
+	pdf.SetTextColor(210, 35, 116)
+	pdf.SetXY(left+16, cardY+88)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: 310, H: 24}, phone, gopdf.CellOption{Align: gopdf.Left | gopdf.Middle}); err != nil {
+		return nil, err
+	}
+
+	pdf.SetFillColor(87, 217, 255)
+	pdf.RectFromUpperLeftWithStyle(left+344, cardY+44, 147, 70, "F")
+	pdf.SetStrokeColor(21, 21, 21)
+	pdf.Line(left+344, cardY+44, left+491, cardY+44)
+	pdf.Line(left+344, cardY+114, left+491, cardY+114)
+	pdf.Line(left+344, cardY+44, left+344, cardY+114)
+	pdf.Line(left+491, cardY+44, left+491, cardY+114)
+	if err := pdf.SetFont("regular", "", 8); err != nil {
+		return nil, err
+	}
+	pdf.SetTextColor(black[0], black[1], black[2])
+	pdf.SetXY(left+356, cardY+54)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: 123, H: 13}, "БАНК", gopdf.CellOption{Align: gopdf.Center | gopdf.Middle}); err != nil {
+		return nil, err
+	}
+	if err := pdf.SetFont("bold", "", 12); err != nil {
+		return nil, err
+	}
+	pdf.SetXY(left+356, cardY+71)
+	if err := pdf.CellWithOption(&gopdf.Rect{W: 123, H: 28}, bank, gopdf.CellOption{Align: gopdf.Center | gopdf.Middle}); err != nil {
+		return nil, err
+	}
+	y += transferCardHeight + 18
 	created := data.CreatedAt
 	if created.IsZero() {
 		created = time.Now()
