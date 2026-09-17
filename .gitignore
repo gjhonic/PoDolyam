@@ -1,0 +1,20 @@
+﻿.tools/
+.cache/
+.env
+.env.*
+!.env.example
+node_modules/
+frontend/dist/
+backend/bin/
+coverage/
+playwright-report/
+test-results/
+.ai/local/
+*.log
+
+build/
+backend/cmd/desktop/ui/*
+!backend/cmd/desktop/ui/README.txt
+
+# Личные исходные таблицы не публикуются.
+/*.xlsx
