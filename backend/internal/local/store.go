@@ -267,6 +267,80 @@ func (s *Store) List(ctx context.Context) ([]meetings.Summary, error) {
 	}
 	return result, rows.Err()
 }
+
+// EnsureOrganizer восстанавливает плательщика только у старого черновика,
+// если сохранённый payer_id пуст или больше не указывает на участника.
+func (s *Store) EnsureOrganizer(ctx context.Context, id, organizerName string) error {
+	organizerName = strings.TrimSpace(organizerName)
+	if organizerName == "" {
+		return meetings.ErrInvalid
+	}
+	current, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if current.State != "draft" {
+		return nil
+	}
+	for _, participant := range current.Bill.Participants {
+		if participant.ID == current.Bill.PayerID && current.Bill.PayerID != "" {
+			return nil
+		}
+	}
+	return s.change(ctx, id, func(meeting *meetings.Meeting) error {
+		if meeting.State != "draft" {
+			return nil
+		}
+		for _, participant := range meeting.Bill.Participants {
+			if participant.ID == meeting.Bill.PayerID && meeting.Bill.PayerID != "" {
+				return nil
+			}
+		}
+		organizerID := ""
+		maxOrder := int64(-1)
+		for index := range meeting.Bill.Participants {
+			participant := &meeting.Bill.Participants[index]
+			if participant.Order > maxOrder {
+				maxOrder = participant.Order
+			}
+			if participant.ID == "me" {
+				participant.Name = organizerName
+				organizerID = participant.ID
+			}
+		}
+		if organizerID == "" {
+			for _, participant := range meeting.Bill.Participants {
+				if strings.EqualFold(strings.TrimSpace(participant.Name), organizerName) {
+					organizerID = participant.ID
+					break
+				}
+			}
+		}
+		if organizerID == "" {
+			organizerID = "me"
+			meeting.Bill.Participants = append(meeting.Bill.Participants, money.Participant{ID: organizerID, Name: organizerName, Order: maxOrder + 1})
+		}
+		meeting.Bill.PayerID = organizerID
+		meeting.Version++
+		return nil
+	})
+}
+
+func (s *Store) Delete(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, "DELETE FROM meetings WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return meetings.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) Create(ctx context.Context, d meetings.Draft) (meetings.Meeting, error) {
 	if err := meetings.ValidateDraft(d); err != nil {
 		return meetings.Meeting{}, err

@@ -135,7 +135,17 @@ func (a *App) Request(method, path, body string) (string, error) {
 		id := parts[2]
 		switch {
 		case method == "GET" && len(parts) == 3:
-			out, err = a.store.Get(ctx, id)
+			profile, profileErr := a.store.GetProfile(ctx)
+			if profileErr != nil {
+				err = profileErr
+			} else if strings.TrimSpace(profile.Name) != "" {
+				err = a.store.EnsureOrganizer(ctx, id, profile.Name)
+			}
+			if err == nil {
+				out, err = a.store.Get(ctx, id)
+			}
+		case method == "DELETE" && len(parts) == 3:
+			err = a.store.Delete(ctx, id)
 		case method == "PUT" && len(parts) == 3:
 			var d struct {
 				meetings.Draft

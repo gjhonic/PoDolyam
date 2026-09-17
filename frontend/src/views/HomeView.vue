@@ -9,7 +9,9 @@ import type { Friend, Meeting, TransferProfile } from '../types'
 const router = useRouter()
 const loading = ref(true), busy = ref(false), error = ref(''), notice = ref('')
 const email = ref(''), password = ref(''), title = ref(''), date = ref(new Date().toLocaleDateString('en-CA'))
-const list = ref<{ id: string; title: string; date: string; state: string }[]>([])
+type MeetingSummary = { id: string; title: string; date: string; state: string }
+const list = ref<MeetingSummary[]>([])
+const deleteTarget = ref<MeetingSummary | null>(null)
 const mainSection = ref<'meetings' | 'friends' | 'profile'>('meetings')
 const profile = ref<TransferProfile>({ name: '', phone: '', bank: '' })
 const friends = ref<Friend[]>([])
@@ -86,6 +88,19 @@ function birthdayLabel(value: string) {
   if (!value) return 'День рождения не указан'
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(new Date(value + 'T12:00:00'))
 }
+async function deleteMeeting() {
+  if (busy.value || !deleteTarget.value) return
+  busy.value = true; error.value = ''; notice.value = ''
+  const target = deleteTarget.value
+  try {
+    await request('/api/meetings/' + encodeURIComponent(target.id), 'DELETE')
+    list.value = list.value.filter(meeting => meeting.id !== target.id)
+    deleteTarget.value = null
+    notice.value = `Встреча «${target.title}» удалена.`
+  } catch (e) { error.value = message(e) }
+  finally { busy.value = false }
+}
+
 async function saveProfile() {
   if (busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
@@ -261,9 +276,20 @@ onMounted(refresh)
             :key="meeting.id"
             class="card"
           >
-            <RouterLink :to="'/meetings/' + meeting.id">
-              {{ meeting.title }}
-            </RouterLink><p>{{ meeting.date }} · {{ stateNames[meeting.state] }}</p>
+            <div class="meeting-card-heading">
+              <RouterLink :to="'/meetings/' + meeting.id">
+                {{ meeting.title }}
+              </RouterLink>
+              <button
+                v-if="isDesktop"
+                type="button"
+                class="delete-meeting-button"
+                :aria-label="'Удалить встречу ' + meeting.title"
+                @click="deleteTarget = meeting"
+              >
+                Удалить
+              </button>
+            </div><p>{{ meeting.date }} · {{ stateNames[meeting.state] }}</p>
           </li>
         </ul>
       </section>
@@ -399,4 +425,53 @@ onMounted(refresh)
       </section>
     </template>
   </template>
+  <Teleport to="body">
+    <div
+      v-if="deleteTarget"
+      class="modal-backdrop"
+      role="presentation"
+      @click.self="deleteTarget = null"
+      @keydown.esc="deleteTarget = null"
+    >
+      <section
+        class="delete-modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-meeting-title"
+        aria-describedby="delete-meeting-warning"
+      >
+        <span
+          class="modal-mark"
+          aria-hidden="true"
+        >!</span>
+        <p class="eyebrow">
+          Необратимое действие
+        </p>
+        <h2 id="delete-meeting-title">
+          Удалить встречу?
+        </h2>
+        <p id="delete-meeting-warning">
+          Встреча <strong>«{{ deleteTarget.title }}»</strong>, её расчёт и история переводов будут удалены с этого компьютера без возможности восстановления.
+        </p>
+        <div class="actions modal-actions">
+          <button
+            type="button"
+            class="secondary"
+            :disabled="busy"
+            @click="deleteTarget = null"
+          >
+            Оставить встречу
+          </button>
+          <button
+            type="button"
+            class="danger-confirm"
+            :disabled="busy"
+            @click="deleteMeeting"
+          >
+            {{ busy ? 'Удаляем…' : 'Удалить навсегда' }}
+          </button>
+        </div>
+      </section>
+    </div>
+  </Teleport>
 </template>

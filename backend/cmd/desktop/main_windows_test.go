@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"podolyam/internal/demo"
 	"podolyam/internal/local"
 	"podolyam/internal/meetings"
 )
@@ -67,6 +69,34 @@ func TestDesktopBridge(t *testing.T) {
 	loaded, err := app.Request("GET", "/api/meetings/"+meeting.ID, "")
 	if err != nil || !json.Valid([]byte(loaded)) {
 		t.Fatalf("load: %s %v", loaded, err)
+	}
+	deleted, err := app.Request("POST", "/api/meetings", `{"title":"На удаление","date":"2026-09-17","venue":"","bill":{"participants":[],"payer_id":"","items":[],"receipt_total":null}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var deletedMeeting meetings.Meeting
+	if err = json.Unmarshal([]byte(deleted), &deletedMeeting); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = app.Request("DELETE", "/api/meetings/"+deletedMeeting.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = app.Request("GET", "/api/meetings/"+deletedMeeting.ID, ""); !errors.Is(err, meetings.ErrNotFound) {
+		t.Fatalf("deleted meeting is available: %v", err)
+	}
+	legacyBill := demo.Restaurant()
+	legacyBill.PayerID = ""
+	legacy, err := store.Create(context.Background(), meetings.Draft{Title: "Старый черновик", Date: "2026-09-17", Bill: legacyBill})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repairedJSON, err := app.Request("GET", "/api/meetings/"+legacy.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var repaired meetings.Meeting
+	if err = json.Unmarshal([]byte(repairedJSON), &repaired); err != nil || repaired.Bill.PayerID == "" {
+		t.Fatalf("organizer was not repaired: %s %v", repairedJSON, err)
 	}
 	for _, body := range []string{`{"unknown":true}`, `{} {}`} {
 		if _, err := app.Request("POST", "/api/meetings", body); err == nil {

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, cpSync, rmSync, writeFileSync, readdirSync } from 'node:fs'
+import { mkdirSync, cpSync, rmSync, writeFileSync, readdirSync, existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -9,6 +9,20 @@ if (process.platform !== 'win32') throw new Error('Используйте нат
 if (!['install', 'test', 'build', 'run'].includes(task)) throw new Error('Команды: install, test, build, run')
 const backend = path.join(root, 'backend')
 const frontend = path.join(root, 'frontend')
+function envValue(name) {
+  for (const filename of ['.env', '.env.example']) {
+    const file = path.join(root, filename)
+    if (!existsSync(file)) continue
+    for (const sourceLine of readFileSync(file, 'utf8').split(/\r?\n/)) {
+      const line = sourceLine.trim()
+      if (!line || line.startsWith('#')) continue
+      const separator = line.indexOf('=')
+      if (separator > 0 && line.slice(0, separator).trim() === name) return line.slice(separator + 1).trim()
+    }
+  }
+  return undefined
+}
+const appVersion = envValue('APP_VERSION') ?? 'dev'
 function go(args) { execFileSync('go', args, { cwd: backend, stdio: 'inherit' }) }
 function npm(args, env = process.env) {
   // Команды заданы самим скриптом, пользовательский ввод в shell не передаётся.
@@ -36,7 +50,7 @@ if (task === 'install') {
   npm(['run', 'lint'])
   npm(['test'])
 } else {
-  npm(['run', 'build'], { ...process.env, VITE_DESKTOP: 'true' })
+  npm(['run', 'build'], { ...process.env, VITE_DESKTOP: 'true', VITE_APP_VERSION: appVersion })
   const target = path.resolve(backend, 'cmd/desktop/ui')
   const expected = path.resolve(backend, 'cmd/desktop')
   // Удаляется исключительно генерируемая копия UI внутри текущего проекта.

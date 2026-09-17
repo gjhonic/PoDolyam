@@ -1,3 +1,7 @@
+<script setup lang="ts">
+const appVersion = import.meta.env.VITE_APP_VERSION || 'dev'
+</script>
+
 <template>
   <header class="header">
     <RouterLink
@@ -7,7 +11,7 @@
     >
       PoDolyam<span aria-hidden="true"> ↗</span>
     </RouterLink>
-    <span class="badge">Windows edition</span>
+    <span class="badge">Windows edition · v{{ appVersion }}</span>
   </header>
   <main id="main">
     <RouterView :key="$route.fullPath" />

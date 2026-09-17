@@ -251,3 +251,58 @@ func TestMigratesVersionTwoProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDeleteMeeting(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	meeting, err := s.Create(ctx, meetings.Draft{Title: "Удалить", Date: "2026-09-17", Bill: demo.Restaurant()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Delete(ctx, meeting.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Get(ctx, meeting.ID); !errors.Is(err, meetings.ErrNotFound) {
+		t.Fatalf("встреча осталась после удаления: %v", err)
+	}
+	if err = s.Delete(ctx, meeting.ID); !errors.Is(err, meetings.ErrNotFound) {
+		t.Fatalf("повторное удаление: %v", err)
+	}
+}
+
+func TestEnsureOrganizerRepairsLegacyDraft(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	bill := demo.Restaurant()
+	bill.PayerID = ""
+	meeting, err := s.Create(ctx, meetings.Draft{Title: "Старый черновик", Date: "2026-09-17", Bill: bill})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var organizerID string
+	for _, participant := range bill.Participants {
+		if participant.Name == "Женя" {
+			organizerID = participant.ID
+		}
+	}
+	if organizerID == "" {
+		t.Fatal("в демоданных нет организатора")
+	}
+	if err = s.EnsureOrganizer(ctx, meeting.ID, "Женя"); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := s.Get(ctx, meeting.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repaired.Bill.PayerID != organizerID || repaired.Version != 2 {
+		t.Fatalf("организатор не восстановлен: %+v", repaired)
+	}
+	if err = s.EnsureOrganizer(ctx, meeting.ID, "Женя"); err != nil {
+		t.Fatal(err)
+	}
+	again, err := s.Get(ctx, meeting.ID)
+	if err != nil || again.Version != repaired.Version {
+		t.Fatalf("повторное открытие изменило черновик: %+v %v", again, err)
+	}
+}

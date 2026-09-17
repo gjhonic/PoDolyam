@@ -435,3 +435,20 @@ button.mini-button { min-height: 32px; margin-top: 6px; padding: 4px 7px; font-s
   .friend-card { grid-template-columns: 50px minmax(0, 1fr); }
   .friend-actions { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* Удаление встречи */
+.meeting-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.delete-meeting-button { min-height: 36px; margin: 2px 0 0; padding: 6px 10px; background: #fff; box-shadow: 3px 3px 0 var(--red); color: #8a170b; font-size: 11px; text-transform: uppercase; }
+.modal-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 24px; background: #151515d9; }
+.delete-modal { position: relative; width: min(560px, 100%); border: 4px solid var(--ink); padding: clamp(24px, 5vw, 42px); background: var(--paper); box-shadow: 12px 12px 0 var(--red); color: var(--ink); transform: rotate(-.35deg); }
+.delete-modal h2 { margin-right: 60px; }
+.modal-mark { position: absolute; top: 22px; right: 24px; display: grid; width: 52px; height: 52px; place-items: center; border: 3px solid var(--ink); border-radius: 50%; background: var(--red); font: 36px Impact, sans-serif; }
+.modal-actions { justify-content: flex-end; margin-top: 25px; }
+button.danger-confirm { background: var(--red); box-shadow: 4px 4px 0 var(--ink); color: var(--ink); }
+@media (max-width: 620px) {
+  .meeting-card-heading { display: block; }
+  .delete-meeting-button { margin-bottom: 8px; }
+  .modal-backdrop { align-items: end; padding: 14px; }
+  .delete-modal { transform: none; }
+  .modal-actions button { width: 100%; }
+}
